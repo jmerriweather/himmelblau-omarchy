@@ -1,0 +1,12 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = omarchy-settings
+Target = omarchy
+Target = himmelblau
+
+[Action]
+Description = Re-asserting Himmelblau integration (omarchy-settings resets nsswitch.conf on upgrade)...
+When = PostTransaction
+Exec = /usr/lib/himmelblau-omarchy/apply

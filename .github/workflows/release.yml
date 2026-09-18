@@ -1,0 +1,32 @@
+# Build both packages, sign them, and attach a pacman repo to a GitHub Release
+# on every v* tag. Needs the packaging private key as the PACKAGING_GPG_KEY
+# secret (gpg --export-secret-keys --armor <fpr>).
+name: release
+on:
+  push:
+    tags: ['v*']
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Import packaging key
+        run: |
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"; mkdir -p "$GNUPGHOME"; chmod 700 "$GNUPGHOME"
+          echo "${{ secrets.PACKAGING_GPG_KEY }}" | gpg --batch --import
+          echo "HIMMELBLAU_OMARCHY_GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+      - name: Build upstream himmelblau (make arch, containerized)
+        run: ./scripts/build-upstream.sh
+      - name: Build himmelblau-omarchy
+        run: ./scripts/build-glue.sh
+      - name: Sign and build repo
+        # repo-add lives in pacman; run it inside an Arch container on the runner.
+        run: |
+          docker run --rm -v "$PWD:/w" -v "$HIMMELBLAU_OMARCHY_GNUPGHOME:/gnupg" -e HIMMELBLAU_OMARCHY_GNUPGHOME=/gnupg \
+            --security-opt label=disable archlinux:base bash -c 'pacman -Sy --noconfirm --quiet >/dev/null; cd /w && ./scripts/repo-update.sh'
+      - name: Verify from a client
+        run: ./scripts/test-repo.sh
+      - name: Attach to release
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: gh release create "${GITHUB_REF_NAME}" repo/* --title "${GITHUB_REF_NAME}" --notes "pacman repo: Server = https://github.com/${GITHUB_REPOSITORY}/releases/latest/download"

@@ -1,0 +1,7 @@
+[SddmGreeterTheme]
+Name=Omarchy (Entra ID)
+Description=Omarchy's login theme with a username field, so Entra ID accounts can sign in
+Author=himmelblau-omarchy
+Type=sddm-theme
+Version=1.0
+QtVersion=6

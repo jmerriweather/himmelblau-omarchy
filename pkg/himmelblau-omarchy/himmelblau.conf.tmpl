@@ -1,0 +1,67 @@
+# /etc/himmelblau/himmelblau.conf  —  rendered by `himmelblau-omarchy setup`
+#
+# Replace <TENANT_DOMAIN> with your Entra tenant (e.g. contoso.onmicrosoft.com,
+# or your verified custom domain). Every option here is one of the documented
+# parameters in himmelblau.conf(5); anything not listed keeps its default.
+#
+# Before this works at all, on the Entra side you need:
+#   - a tenant you can register devices in
+#   - MFA configured for the account doing the first device join (hard requirement)
+#   - admin consent for the Himmelblau app registration, unless you use the
+#     default broker app id
+
+[global]
+domain = <TENANT_DOMAIN>
+
+# --- identity mapping ---------------------------------------------------------
+# Must be identical on every machine that will see these users, and must not
+# collide with local uids. Omarchy's owner account is uid 1000, so the default
+# range is already clear of it. Changing this later requires:
+#   sudo aad-tool cache-clear --full
+idmap_range = 200000-2000200000
+
+# --- what a new cloud user's account looks like -------------------------------
+home_prefix = /home/
+shell = /usr/bin/bash
+
+# THE important one for Omarchy. Omarchy 4 seeds a user's entire desktop from
+# /etc/skel (~85 MB: .config/hypr, .config/omarchy, alacritty, nvim, ...), so a
+# cloud user created by Himmelblau gets a working Hyprland session instead of an
+# empty home. Leave this true.
+use_etc_skel = true
+
+# Runs as root after every successful auth, with USERNAME and ACCESS_TOKEN set.
+# Return code matters: 0 = ok, 1 = soft failure (login proceeds), 2 = login FAILS.
+# Used here to run the per-user Omarchy setup that /etc/skel cannot do.
+logon_script = /etc/himmelblau/omarchy-logon.sh
+
+# --- authorization ------------------------------------------------------------
+# Without this, ANY user in the tenant can log into this machine. Entra groups
+# must be given as Object ID GUIDs (names are not unique in Entra and are
+# rejected); individual users are given by UPN.
+# pam_allow_groups = 11111111-2222-3333-4444-555555555555, you@<TENANT_DOMAIN>
+
+# Members of these Entra groups (Object ID GUIDs) get the local group below.
+# On Arch the sudo group is `wheel`, not `sudo`.
+# sudo_groups = 11111111-2222-3333-4444-555555555555
+# local_sudo_group = wheel
+#
+# Note the blunter alternative, local_groups = wheel, gives EVERY Entra user
+# sudo on this box. Prefer sudo_groups.
+
+# --- key storage --------------------------------------------------------------
+# This machine has a TPM (/dev/tpm0, /dev/tpmrm0). Start with the hybrid mode,
+# which binds to the TPM when it can and still works when it cannot; switch to
+# `tpm` once the spike shows the TPM path working.
+hsm_type = tpm_bound_soft_if_possible
+# tpm_tcti_name = device:/dev/tpmrm0
+
+# --- login experience ---------------------------------------------------------
+# Hello PIN: a device-bound credential enrolled at first local desktop login.
+# Worth disabling for the first spike run, because enrollment needs a multi-step
+# PAM conversation and Omarchy's SDDM theme can only send a single password.
+enable_hello = false
+# hello_pin_min_length = 6
+
+# Uncomment once you are testing from a TTY rather than over SSH.
+# allow_console_password_only = true

@@ -1,0 +1,6 @@
+upstream/
+dist/
+repo/
+pkg/himmelblau-omarchy/*.pkg.tar.zst
+pkg/himmelblau-omarchy/src/
+pkg/himmelblau-omarchy/pkg/

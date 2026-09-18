@@ -1,0 +1,22 @@
+post_install() {
+  /usr/lib/himmelblau-omarchy/apply || echo "warning: apply failed; run: sudo himmelblau-omarchy apply"
+  cat <<'MSG'
+
+himmelblau-omarchy: PAM/NSS layout applied; greeter set to omarchy-entra.
+Nothing talks to a tenant yet. Next:
+
+    sudo himmelblau-omarchy setup --domain <tenant>.onmicrosoft.com
+    sudo himmelblau-omarchy check <your-local-user>
+
+MSG
+}
+
+post_upgrade() {
+  /usr/lib/himmelblau-omarchy/apply || echo "warning: apply failed; run: sudo himmelblau-omarchy apply"
+}
+
+pre_remove() {
+  # Strip only what this package added. nsswitch.conf and himmelblau.conf stay:
+  # the himmelblau package owns those decisions.
+  /usr/lib/himmelblau-omarchy/apply --remove || :
+}

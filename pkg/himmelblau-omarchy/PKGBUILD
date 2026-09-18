@@ -1,0 +1,47 @@
+# Maintainer: Jono <Jono@live.com>
+#
+# Omarchy integration for Himmelblau. Upstream's PKGBUILD builds Himmelblau
+# itself; this package is the glue that keeps it working on Omarchy:
+#   - a pacman hook re-asserting NSS + PAM after omarchy-settings upgrades
+#     (its post_upgrade overwrites /etc/nsswitch.conf every time)
+#   - a pam_localuser-gated PAM layout, so local users never depend on the daemon
+#   - an SDDM theme with a username field (stock Omarchy theme has none)
+#   - a logon hook that runs omarchy-provision-user for new cloud users
+
+pkgname=himmelblau-omarchy
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Entra ID login on Omarchy via Himmelblau: update-proof PAM/NSS wiring and a greeter with a username field"
+arch=('any')
+url="https://github.com/himmelblau-idm/himmelblau"
+license=('MIT')
+depends=('himmelblau>=5.0.0' 'omarchy-settings' 'pam' 'python' 'sddm' 'bash')
+install=himmelblau-omarchy.install
+backup=('etc/sddm.conf.d/50-himmelblau-omarchy.conf')
+source=(apply.py pamprobe.py himmelblau-omarchy 90-himmelblau-omarchy.hook
+        50-himmelblau-omarchy.conf omarchy-logon.sh himmelblau.conf.tmpl
+        Main.qml metadata.desktop theme.conf)
+# Local sources; pin real checksums when this moves to a repo.
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  cd "$srcdir"
+  install -Dm755 apply.py    "$pkgdir/usr/lib/himmelblau-omarchy/apply"
+  install -Dm644 pamprobe.py "$pkgdir/usr/lib/himmelblau-omarchy/pamprobe.py"
+  install -Dm755 himmelblau-omarchy "$pkgdir/usr/bin/himmelblau-omarchy"
+  install -Dm644 90-himmelblau-omarchy.hook "$pkgdir/usr/share/libalpm/hooks/90-himmelblau-omarchy.hook"
+  install -Dm644 50-himmelblau-omarchy.conf "$pkgdir/etc/sddm.conf.d/50-himmelblau-omarchy.conf"
+  install -Dm755 omarchy-logon.sh "$pkgdir/etc/himmelblau/omarchy-logon.sh"
+  install -Dm644 himmelblau.conf.tmpl "$pkgdir/usr/share/himmelblau-omarchy/himmelblau.conf.tmpl"
+
+  local theme="$pkgdir/usr/share/sddm/themes/omarchy-entra"
+  install -Dm644 Main.qml "$theme/Main.qml"
+  install -Dm644 metadata.desktop "$theme/metadata.desktop"
+  install -Dm644 theme.conf "$theme/theme.conf"
+  # Visual assets follow the stock theme, which omarchy-plymouth-set regenerates
+  # on theme changes, so an Omarchy theme switch carries over.
+  local a
+  for a in bullet.png entry-failed.png entry.png lock-failed.png lock.png logo.png; do
+    ln -s "../omarchy/$a" "$theme/$a"
+  done
+}

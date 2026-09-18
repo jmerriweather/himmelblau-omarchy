@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+# himmelblau-omarchy — Entra ID login on Omarchy, kept in place across updates.
+set -euo pipefail
+
+LIB=/usr/lib/himmelblau-omarchy
+CONF=/etc/himmelblau/himmelblau.conf
+TMPL=/usr/share/himmelblau-omarchy/himmelblau.conf.tmpl
+AUTOLOGIN=/etc/sddm.conf.d/autologin.conf
+
+usage() {
+  cat <<'USAGE'
+Usage: himmelblau-omarchy <command> [options]
+
+  setup --domain <tenant>             Render /etc/himmelblau/himmelblau.conf, apply the
+        [--allow <upn|guid>,...]      PAM/NSS layout, enable the daemons.
+        [--sudo-group <guid>]         Entra groups are Object ID GUIDs, never names.
+        [--disable-autologin]         Show the greeter at boot instead of autologin.
+        [--force]                     Overwrite an existing himmelblau.conf (backed up).
+  apply [--check|--remove]            Re-assert (or audit, or strip) the PAM/NSS layout.
+  check <user> [service...]           Prove login paths still work for a LOCAL user,
+                                      from an open shell, before you log out.
+  status                              Daemons, NSS, PAM, greeter, tenant.
+USAGE
+}
+
+need_root() { (( EUID == 0 )) || { echo "run as root" >&2; exit 1; }; }
+
+cmd_setup() {
+  need_root
+  local domain="" allow="" sudo_group="" force=0 disable_autologin=0
+  while (($#)); do
+    case "$1" in
+      --domain) domain="${2:-}"; shift 2 ;;
+      --allow) allow="${2:-}"; shift 2 ;;
+      --sudo-group) sudo_group="${2:-}"; shift 2 ;;
+      --force) force=1; shift ;;
+      --disable-autologin) disable_autologin=1; shift ;;
+      *) echo "unknown option: $1" >&2; usage >&2; exit 1 ;;
+    esac
+  done
+  [[ -n $domain ]] || { echo "--domain is required" >&2; exit 1; }
+
+  if [[ -f $CONF ]] && grep -q '^domain = ' "$CONF" && ! grep -q '<TENANT_DOMAIN>' "$CONF" && (( ! force )); then
+    echo "$CONF already has a domain; use --force to overwrite (a backup is kept)." >&2
+    exit 1
+  fi
+  [[ -f $CONF ]] && cp -f "$CONF" "$CONF.bak.$(date +%s)"
+
+  sed -e "s/<TENANT_DOMAIN>/$domain/g" "$TMPL" > "$CONF"
+  if [[ -n $allow ]]; then
+    sed -i -E "s|^# pam_allow_groups = .*|pam_allow_groups = ${allow//,/, }|" "$CONF"
+  fi
+  if [[ -n $sudo_group ]]; then
+    sed -i -E -e "s|^# sudo_groups = .*|sudo_groups = $sudo_group|" -e "s|^# local_sudo_group = wheel|local_sudo_group = wheel|" "$CONF"
+  fi
+  chmod 0644 "$CONF"
+  echo "rendered $CONF for $domain"
+
+  "$LIB/apply"
+
+  if (( disable_autologin )) && [[ -f $AUTOLOGIN ]]; then
+    mv -f "$AUTOLOGIN" "$AUTOLOGIN.disabled"
+    echo "autologin disabled ($AUTOLOGIN.disabled); the greeter will show at next boot"
+  fi
+
+  if systemctl is-system-running >/dev/null 2>&1 || [[ -d /run/systemd/system ]]; then
+    systemctl enable --now himmelblaud himmelblaud-tasks && echo "daemons enabled"
+  else
+    echo "not booted with systemd here; enable later: systemctl enable --now himmelblaud himmelblaud-tasks"
+  fi
+
+  cat <<NEXT
+
+Next:
+  1. sudo himmelblau-omarchy check <your-local-user>     # every path OK before you log out
+  2. Do the first Entra login from a TTY (Ctrl+Alt+F3):  # device join needs MFA,
+     login: <you>@$domain                               # which the greeter cannot drive
+  3. Then sign in from the greeter with the same UPN.
+NEXT
+}
+
+cmd_check() {
+  need_root
+  local user="${1:-}"; shift || true
+  [[ -n $user ]] || { echo "usage: himmelblau-omarchy check <user> [service...]" >&2; exit 1; }
+  local services=("$@")
+  if (( ${#services[@]} == 0 )); then
+    for s in system-auth system-login sddm omarchy-lock-password; do
+      [[ -f /etc/pam.d/$s ]] && services+=("$s")
+    done
+  fi
+  exec python3 "$LIB/pamprobe.py" check "$user" "${services[@]}"
+}
+
+cmd_status() {
+  echo "daemons:   himmelblaud=$(systemctl is-active himmelblaud 2>/dev/null || echo n/a) himmelblaud-tasks=$(systemctl is-active himmelblaud-tasks 2>/dev/null || echo n/a)"
+  echo "tenant:    $(grep -E '^domain = ' "$CONF" 2>/dev/null | cut -d= -f2- | xargs || echo '(not set — run setup)')"
+  echo "nss:       $(grep -E '^passwd:' /etc/nsswitch.conf | grep -q himmelblau && echo wired || echo NOT WIRED)"
+  for f in system-auth system-login omarchy-lock-password; do
+    [[ -f /etc/pam.d/$f ]] || continue
+    printf 'pam:       %-22s blocks=%s bare=%s\n' "$f" \
+      "$(grep -c 'himmelblau-omarchy:begin' /etc/pam.d/$f)" \
+      "$(awk '/himmelblau-omarchy:begin/{s=1} /himmelblau-omarchy:end/{s=0;next} !s && /pam_himmelblau/{n++} END{print n+0}' /etc/pam.d/$f)"
+  done
+  echo "greeter:   theme=$(grep -hs '^Current=' /etc/sddm.conf.d/*.conf | tail -1 | cut -d= -f2) autologin=$([[ -f $AUTOLOGIN ]] && echo on || echo off)"
+  if (( EUID == 0 )); then
+    "$LIB/apply" --check >/dev/null && echo "layout:    in place" || echo "layout:    DRIFT — run: sudo himmelblau-omarchy apply"
+  fi
+}
+
+case "${1:-}" in
+  setup) shift; cmd_setup "$@" ;;
+  apply) shift; need_root; exec "$LIB/apply" "$@" ;;
+  check) shift; cmd_check "$@" ;;
+  status) cmd_status ;;
+  -h|--help|help|"") usage ;;
+  *) echo "unknown command: $1" >&2; usage >&2; exit 1 ;;
+esac
