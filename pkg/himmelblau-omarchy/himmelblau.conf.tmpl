@@ -57,10 +57,16 @@ hsm_type = tpm_bound_soft_if_possible
 # tpm_tcti_name = device:/dev/tpmrm0
 
 # --- login experience ---------------------------------------------------------
-# Hello PIN: a device-bound credential enrolled at first local desktop login.
-# Worth disabling for the first spike run, because enrollment needs a multi-step
-# PAM conversation and Omarchy's SDDM theme can only send a single password.
-enable_hello = false
+# Hello PIN: a device-bound credential. Once enrolled, the login screen and the
+# lock screen take a single PIN prompt, which SDDM handles.
+#
+# ENROL FROM A TEXT CONSOLE (Ctrl+Alt+F3), NOT THE LOGIN SCREEN. Enrollment is
+# a multi-step PAM conversation ("New PIN", "Confirm PIN"); SDDM answers every
+# prompt with the password you typed, so a first login at the greeter would
+# silently enrol your Entra password as the PIN. There is no per-service switch
+# to prevent that (no_hello_pin disables PIN login entirely), so the rule is
+# procedural: first sign-in on a tty, every later one wherever you like.
+enable_hello = true
 # hello_pin_min_length = 6
 
 # Uncomment once you are testing from a TTY rather than over SSH.

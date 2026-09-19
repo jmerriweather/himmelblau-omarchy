@@ -9,7 +9,7 @@
 #   - a logon hook that runs omarchy-provision-user for new cloud users
 
 pkgname=himmelblau-omarchy
-pkgver=0.1.1
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="Entra ID login on Omarchy via Himmelblau: update-proof PAM/NSS wiring and a greeter with a username field"
 arch=('any')

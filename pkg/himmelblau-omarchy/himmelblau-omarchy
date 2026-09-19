@@ -72,10 +72,18 @@ cmd_setup() {
   cat <<NEXT
 
 Next:
-  1. sudo himmelblau-omarchy check <your-local-user>     # every path OK before you log out
-  2. Do the first Entra login from a TTY (Ctrl+Alt+F3):  # device join needs MFA,
-     login: <you>@$domain                               # which the greeter cannot drive
-  3. Then sign in from the greeter with the same UPN.
+  1. sudo himmelblau-omarchy check <your-local-user>
+     Every login path must say OK before you log out or lock the screen.
+
+  2. FIRST SIGN-IN FOR EACH USER: TEXT CONSOLE ONLY (Ctrl+Alt+F3).
+       login: <you>@$domain
+     That login does the device join, MFA, and Hello PIN enrollment
+     ("New PIN" / "Confirm PIN"). The graphical login screen cannot run those
+     steps: it would silently enrol the Entra password as the PIN.
+
+  3. From then on, sign in at the login screen with the same UPN and the PIN.
+     Push / number-matching MFA is shown on the login screen when Entra asks
+     for it; code-entry MFA is not supported there — use a tty for that.
 NEXT
 }
 

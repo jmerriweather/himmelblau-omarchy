@@ -103,6 +103,7 @@ assert "conf rendered with domain" grep -q '^domain = example.onmicrosoft.com' /
 assert "status: tenant shows the domain after setup" bash -c "himmelblau-omarchy status | grep -qE '^tenant: +example.onmicrosoft.com$'"
 assert "conf: pam_allow_groups set" grep -q '^pam_allow_groups = 1111' /etc/himmelblau/himmelblau.conf
 assert "conf: sudo_groups + local_sudo_group=wheel" bash -c "grep -q '^sudo_groups = 1111' /etc/himmelblau/himmelblau.conf && grep -q '^local_sudo_group = wheel' /etc/himmelblau/himmelblau.conf"
+assert "conf: Hello PIN enabled" grep -q '^enable_hello = true' /etc/himmelblau/himmelblau.conf
 assert "conf: template placeholder gone" bash -c '! grep -q TENANT_DOMAIN /etc/himmelblau/himmelblau.conf'
 assert "setup refuses to overwrite without --force" bash -c '! himmelblau-omarchy setup --domain other.onmicrosoft.com'
 echo "  --- status ---"; himmelblau-omarchy status | sed 's/^/    /'

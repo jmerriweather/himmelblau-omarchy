@@ -78,10 +78,21 @@ sudo himmelblau-omarchy check <your-local-user>
 ```
 
 This drives PAM for every login path (`sudo`, tty, SDDM, the lock screen) and
-prints OK or DENY with timings. Only when all four say OK, do the first Entra
-sign-in from a text console (`Ctrl+Alt+F3`) using your full UPN. That first
-login performs the device registration and MFA, which the graphical greeter
-cannot drive. After that, sign in from the greeter.
+prints OK or DENY with timings. Only when all four say OK, move on.
+
+**Each user's first sign-in must be on a text console** (`Ctrl+Alt+F3`), with
+the full UPN. That login performs the device registration, MFA, and Hello PIN
+enrollment ("New PIN" / "Confirm PIN"). From then on the login screen and the
+lock screen take the PIN, and push / number-matching MFA is displayed on the
+login screen whenever Entra asks for it.
+
+Why the rule: SDDM's daemon answers every PAM prompt with the password that was
+typed, and no theme can change that. A first login at the greeter would
+therefore answer "New PIN" and "Confirm PIN" with the Entra password and
+silently enrol *that* as the PIN. Nothing goes wrong visibly, which is exactly
+the problem. Himmelblau has no per-service way to allow PIN login but refuse
+enrollment, so the rule is procedural. If it happens anyway, re-enrol from a
+tty with `aad-tool auth-test --force-reauth -D <upn>` after clearing the PIN.
 
 `himmelblau-omarchy status` shows daemons, tenant, and whether the wiring is
 in place.
@@ -94,6 +105,7 @@ in place.
 | `aad-tool configure-pam` patches both `system-auth` and `system-login` on Arch; the latter includes the former, so every login runs the module twice, and the daemon is consulted for local users too | Installs the layout `pam_himmelblau(8)` recommends but the tool does not emit: each line behind a `pam_localuser` gate, in `system-auth` only. Local users never contact the daemon |
 | Omarchy's Quickshell lock screen uses its own PAM service, which nothing configures | Wired, gated, re-applied if Omarchy regenerates the file |
 | The stock SDDM theme has no username field; it logs in `userModel.lastUser`, so a cloud account cannot be selected | Ships `omarchy-entra`, the stock theme plus a username field, selected by a drop-in. Its images are symlinks to the stock theme, so Omarchy theme changes carry over |
+| SDDM forwards PAM info messages to the theme, but the stock theme never shows them, so number-matching MFA cannot be completed at the login screen | `omarchy-entra` renders them: the number to match, push hints, "Enrolling the Hello PIN. Please wait..." |
 | A new cloud user gets `/etc/skel` (Omarchy's full config) but not the per-user steps `omarchy-provision-user` runs | A Himmelblau `logon_script` runs it, detached, on first login |
 | Tenant configuration does not belong in a package | `setup` renders `/etc/himmelblau/himmelblau.conf` from a template |
 
@@ -124,12 +136,14 @@ Never convert the account you administer the machine with to a cloud identity.
 
 ## Limitations
 
-- **MFA and Hello PIN enrollment cannot happen at the graphical login.** SDDM
-  sends a single password; it cannot carry a multi-step PAM conversation.
-  Enrol from a tty first. `enable_hello` is off in the rendered config for
-  the same reason.
-- The lock screen answers any PAM prompt with what you typed, so a PIN works
-  but a prompt that needs a different answer does not display.
+- **Enrollment and code-entry MFA cannot happen at the graphical login.** SDDM
+  carries exactly one secret per attempt. Password, PIN, and push /
+  number-matching MFA work there; "enter the code from your app" and Hello PIN
+  enrollment do not. Enrol on a tty (see Set up). The real fix is a greeter
+  that speaks a full PAM conversation — greetd plus a Quickshell greeter is the
+  planned route, since Omarchy already ships both toolkits.
+- The lock screen has the same one-secret behaviour: PIN unlock works, a
+  re-auth that needs a code does not.
 - Omarchy deliberately runs a passwordless default keyring and strips
   `pam_gnome_keyring` from SDDM's stack; keyring unlock for cloud users is
   not addressed here.

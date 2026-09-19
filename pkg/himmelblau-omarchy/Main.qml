@@ -14,6 +14,11 @@ Rectangle {
   color: "#1a1b26"
 
   property bool loginFailed: false
+  // PAM_TEXT_INFO / PAM_ERROR_MSG from the auth stack, forwarded by the SDDM
+  // daemon. Himmelblau uses these for MFA: "open Authenticator and enter 42",
+  // push-notification hints, "Enrolling the Hello PIN. Please wait...".
+  // Without showing them, number-matching MFA cannot be completed here.
+  property string infoMessage: ""
   property int sessionIndex: {
     for (var i = 0; i < sessionModel.rowCount(); i++) {
       var name = (sessionModel.data(sessionModel.index(i, 0), Qt.DisplayRole) || "").toString()
@@ -34,6 +39,9 @@ Rectangle {
 
   Connections {
     target: sddm
+    function onInformationMessage(message) {
+      root.infoMessage = message
+    }
     function onLoginFailed() {
       root.loginFailed = true
       root.password.text = ""
@@ -41,6 +49,7 @@ Rectangle {
     }
     function onLoginSucceeded() {
       root.loginFailed = false
+      root.infoMessage = ""
     }
   }
 
@@ -147,11 +156,24 @@ Rectangle {
           id: passwordBox
           masked: true
           failed: root.loginFailed
-          onEdited: root.loginFailed = false
+          onEdited: { root.loginFailed = false; root.infoMessage = "" }
           onAccepted: root.attemptLogin()
           onTabbed: root.username.forceActiveFocus()
         }
       }
+    }
+
+    Text {
+      id: info
+      visible: text.length > 0
+      text: root.infoMessage
+      width: Math.min(root.width * 0.8, 640)
+      anchors.horizontalCenter: parent.horizontalCenter
+      horizontalAlignment: Text.AlignHCenter
+      wrapMode: Text.Wrap
+      font.family: "JetBrainsMono Nerd Font"
+      font.pixelSize: 16
+      color: root.loginFailed ? "#f7768e" : "#c0caf5"
     }
   }
 
