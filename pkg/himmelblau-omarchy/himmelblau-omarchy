@@ -92,9 +92,18 @@ cmd_check() {
   exec python3 "$LIB/pamprobe.py" check "$user" "${services[@]}"
 }
 
+# `systemctl is-active` prints its answer AND exits non-zero for anything but
+# active, so `|| echo n/a` would print both. Capture, then default.
+unit_state() { local s; s=$(systemctl is-active "$1" 2>/dev/null || true); echo "${s:-n/a}"; }
+
+tenant() {
+  local d; d=$(grep -E '^domain = ' "$CONF" 2>/dev/null | head -1 | cut -d= -f2- | xargs -r || true)
+  [[ -n $d && $d != *TENANT_DOMAIN* ]] && echo "$d" || echo "(not set — run setup)"
+}
+
 cmd_status() {
-  echo "daemons:   himmelblaud=$(systemctl is-active himmelblaud 2>/dev/null || echo n/a) himmelblaud-tasks=$(systemctl is-active himmelblaud-tasks 2>/dev/null || echo n/a)"
-  echo "tenant:    $(grep -E '^domain = ' "$CONF" 2>/dev/null | cut -d= -f2- | xargs || echo '(not set — run setup)')"
+  echo "daemons:   himmelblaud=$(unit_state himmelblaud) himmelblaud-tasks=$(unit_state himmelblaud-tasks)"
+  echo "tenant:    $(tenant)"
   echo "nss:       $(grep -E '^passwd:' /etc/nsswitch.conf | grep -q himmelblau && echo wired || echo NOT WIRED)"
   for f in system-auth system-login omarchy-lock-password; do
     [[ -f /etc/pam.d/$f ]] || continue

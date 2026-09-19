@@ -18,5 +18,7 @@ mkdir -p "$DIST"
 ( cd "$SRC" && make arch ) > "$DIST/build-upstream.log" 2>&1 || { tail -30 "$DIST/build-upstream.log" >&2; die "make arch failed (log: dist/build-upstream.log)"; }
 shopt -s nullglob; pkgs=( "$SRC"/packaging/himmelblau-*.pkg.tar.zst )
 (( ${#pkgs[@]} )) || die "no package produced"
+# dist/ is the set to publish: one version of each package. Drop the old one.
+find "$DIST" -maxdepth 1 -name 'himmelblau-[0-9]*.pkg.tar.zst' -delete
 cp -f "${pkgs[@]}" "$DIST/"
 log "built: $(basename "${pkgs[-1]}")"

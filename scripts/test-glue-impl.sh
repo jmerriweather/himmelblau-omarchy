@@ -95,8 +95,12 @@ mv /tmp/pam_localuser.so /usr/lib/security/
 /usr/lib/himmelblau-omarchy/apply >/dev/null && ok "apply succeeds again once the module is back"
 
 step "CLI"
+st=$(himmelblau-omarchy status)
+assert "status: tenant line is a single line with the hint before setup" bash -c "grep -qE '^tenant: +\(not set' <<<'$st' && [ \"\$(grep -c . <<<'$st')\" = \"\$(grep -cE '^[a-z]+: ' <<<'$st')\" ]"
+assert "status: daemon states are single tokens" bash -c "grep -qE '^daemons: +himmelblaud=[a-z/]+ himmelblaud-tasks=[a-z/]+$' <<<'$st'"
 himmelblau-omarchy setup --domain example.onmicrosoft.com --allow 11111111-2222-3333-4444-555555555555 --sudo-group 11111111-2222-3333-4444-555555555555 2>&1 | sed 's/^/    /'
 assert "conf rendered with domain" grep -q '^domain = example.onmicrosoft.com' /etc/himmelblau/himmelblau.conf
+assert "status: tenant shows the domain after setup" bash -c "himmelblau-omarchy status | grep -qE '^tenant: +example.onmicrosoft.com$'"
 assert "conf: pam_allow_groups set" grep -q '^pam_allow_groups = 1111' /etc/himmelblau/himmelblau.conf
 assert "conf: sudo_groups + local_sudo_group=wheel" bash -c "grep -q '^sudo_groups = 1111' /etc/himmelblau/himmelblau.conf && grep -q '^local_sudo_group = wheel' /etc/himmelblau/himmelblau.conf"
 assert "conf: template placeholder gone" bash -c '! grep -q TENANT_DOMAIN /etc/himmelblau/himmelblau.conf'

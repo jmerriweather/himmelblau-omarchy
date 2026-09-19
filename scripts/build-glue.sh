@@ -13,5 +13,7 @@ useradd -m build; chown -R build /w/build
 # -d: himmelblau is not in a repo the container can see.
 runuser -u build -- bash -c 'cd /w/build && makepkg -f -d --skipinteg >/dev/null'
 IN
+# dist/ is the set to publish: one version of each package. Drop the old one.
+rm -f "$DIST"/himmelblau-omarchy-*.pkg.tar.zst
 cp -f "$WORK"/build/himmelblau-omarchy-*.pkg.tar.zst "$DIST/"
 log "built: $(ls "$DIST" | grep -E '^himmelblau-omarchy-.*\.zst$' | tail -1)"
