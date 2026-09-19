@@ -13,6 +13,12 @@ if [[ ! -d $SRC/.git ]]; then
 fi
 git -C "$SRC" fetch -q origin
 git -C "$SRC" checkout -q --force "$HIMMELBLAU_REF"
+# Upstream's container build runs makepkg as a builder user that it tries to
+# give the checkout owner's uid; when that uid is taken inside the image (as on
+# GitHub runners) the builder cannot write into the bind-mounted tree and the
+# man-page generation step fails with EACCES. The clone is throwaway, so make
+# it writable by anyone.
+chmod -R a+rwX "$SRC"
 log "building at $(git -C "$SRC" rev-parse --short HEAD) ($(git -C "$SRC" log -1 --format=%cs))"
 mkdir -p "$DIST"
 ( cd "$SRC" && make arch ) > "$DIST/build-upstream.log" 2>&1 || { tail -30 "$DIST/build-upstream.log" >&2; die "make arch failed (log: dist/build-upstream.log)"; }
