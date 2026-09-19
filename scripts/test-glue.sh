@@ -8,5 +8,5 @@ SPIKE="${SPIKE:-$ROOT/scripts}"
 [[ -x $SPIKE/test-glue-impl.sh ]] || die "spike test not found at $SPIKE/test-glue-impl.sh"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/out"; cp "$DIST"/*.pkg.tar.zst "$tmp/out/"
-sed -e "s|^OUT=.*|OUT=$tmp/out|" "$SPIKE/test-glue-impl.sh" > "$tmp/test.sh"
-bash "$tmp/test.sh"
+sed -e "s|^OUT=.*|OUT=$tmp/out|" -e "s|^ROOT=.*|ROOT=$ROOT|" "$SPIKE/test-glue-impl.sh" > "$tmp/test.sh"
+FIXTURES="$ROOT/scripts/fixtures" bash "$tmp/test.sh"

@@ -1,10 +1,13 @@
-# Build both packages, sign them, and attach a pacman repo to a GitHub Release
-# on every v* tag. Needs the packaging private key as the PACKAGING_GPG_KEY
-# secret (gpg --export-secret-keys --armor <fpr>).
+# Build both packages, sign them, test, and — on a v* tag only — attach a pacman
+# repo to a GitHub Release. Manual runs (workflow_dispatch) do everything except
+# the release, which is how to prove the pipeline without publishing.
+# Needs the packaging private key as the PACKAGING_GPG_KEY secret
+# (gpg --export-secret-keys --armor <fpr>).
 name: release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -15,18 +18,27 @@ jobs:
         run: |
           export GNUPGHOME="$RUNNER_TEMP/gnupg"; mkdir -p "$GNUPGHOME"; chmod 700 "$GNUPGHOME"
           echo "${{ secrets.PACKAGING_GPG_KEY }}" | gpg --batch --import
+          gpg --batch --list-secret-keys --with-colons | awk -F: '/^fpr/{print "imported " $10; exit}'
           echo "HIMMELBLAU_OMARCHY_GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
       - name: Build upstream himmelblau (make arch, containerized)
         run: ./scripts/build-upstream.sh
       - name: Build himmelblau-omarchy
         run: ./scripts/build-glue.sh
+      - name: End-to-end test (Omarchy PAM fixtures in a container)
+        run: ./scripts/test-glue.sh
       - name: Sign and build repo
         # repo-add lives in pacman; run it inside an Arch container on the runner.
         run: |
-          docker run --rm -v "$PWD:/w" -v "$HIMMELBLAU_OMARCHY_GNUPGHOME:/gnupg" -e HIMMELBLAU_OMARCHY_GNUPGHOME=/gnupg \
-            --security-opt label=disable archlinux:base bash -c 'pacman -Sy --noconfirm --quiet >/dev/null; cd /w && ./scripts/repo-update.sh'
-      - name: Verify from a client
+          docker run --rm -v "$PWD:/w" -v "$HIMMELBLAU_OMARCHY_GNUPGHOME:/gnupg" \
+            -e HIMMELBLAU_OMARCHY_GNUPGHOME=/gnupg --security-opt label=disable archlinux:base \
+            bash -c 'pacman -Sy --noconfirm --quiet >/dev/null; cd /w && ./scripts/repo-update.sh'
+          sudo chown -R "$(id -u):$(id -g)" repo dist
+      - name: Verify from a client (signatures, tamper refusal)
         run: ./scripts/test-repo.sh
+      - name: Keep the repo as a run artifact
+        uses: actions/upload-artifact@v4
+        with: { name: pacman-repo, path: repo/ }
       - name: Attach to release
+        if: github.ref_type == 'tag'
         env: { GH_TOKEN: '${{ github.token }}' }
         run: gh release create "${GITHUB_REF_NAME}" repo/* --title "${GITHUB_REF_NAME}" --notes "pacman repo: Server = https://github.com/${GITHUB_REPOSITORY}/releases/latest/download"

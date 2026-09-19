@@ -15,11 +15,17 @@ IMAGE="${IMAGE:-archlinux:base}"
 ls "$OUT"/himmelblau-5*.pkg.tar.zst "$OUT"/himmelblau-omarchy-*.pkg.tar.zst >/dev/null
 
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
+# Seed from the vendored fixtures (an Omarchy 4.0.4 PAM stack), falling back to
+# this host's files only when run somewhere without them. CI runners are not
+# Arch, so the fixtures are what make this test portable.
+FIX="${FIXTURES:-$ROOT/scripts/fixtures}"
 mkdir -p "$WORK/host-pam"
 for f in system-auth system-login system-local-login omarchy-lock-password sddm sddm-autologin; do
-  [[ -f /etc/pam.d/$f ]] && cp "/etc/pam.d/$f" "$WORK/host-pam/$f"
+  if [[ -f $FIX/pam.d/$f ]]; then cp "$FIX/pam.d/$f" "$WORK/host-pam/$f"
+  elif [[ -f /etc/pam.d/$f ]]; then cp "/etc/pam.d/$f" "$WORK/host-pam/$f"; fi
 done
-cp /usr/share/omarchy/etc-overrides/nsswitch.conf "$WORK/omarchy-nsswitch.conf"
+if [[ -f $FIX/omarchy-nsswitch.conf ]]; then cp "$FIX/omarchy-nsswitch.conf" "$WORK/omarchy-nsswitch.conf"
+else cp /usr/share/omarchy/etc-overrides/nsswitch.conf "$WORK/omarchy-nsswitch.conf"; fi
 
 cat > "$WORK/inside.sh" <<'IN'
 #!/usr/bin/env bash
