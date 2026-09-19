@@ -14,6 +14,14 @@ users. Everything is delivered as a signed pacman repository.
 > stack. It has not yet been run on a physical Omarchy desktop, so the greeter's
 > rendering, TPM-backed keys, and a live tenant sign-in are unconfirmed.
 > Read [Safety](#safety) before installing, and expect rough edges.
+>
+> **Built with heavy AI assistance.** The investigation, code, tests, and this
+> README were produced largely by an AI coding agent (Claude Code) working with
+> the author, who directed and reviewed the work but did not independently
+> write or audit every line. The tests are real and pass, but this touches
+> PAM and NSS on your login path: read `pkg/himmelblau-omarchy/apply.py` and
+> the PAM layout it installs yourself before trusting it on a machine that
+> matters, and treat any claim here as something to verify, not assume.
 
 ## Requirements
 
